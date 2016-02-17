@@ -49,7 +49,7 @@ class KotlinAnnotatedElementsSearcher : QueryExecutor<PsiModifierListOwner, Anno
                     val lightClass = declaration.toLightClass()
                     consumer.process(lightClass)
                 }
-                is KtNamedFunction, is KtSecondaryConstructor -> {
+                is KtNamedFunction, is KtConstructor<*> -> {
                     val wrappedMethod = LightClassUtil.getLightClassMethod(declaration as KtFunction)
                     consumer.process(wrappedMethod)
                 }
