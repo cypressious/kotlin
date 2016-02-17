@@ -41,7 +41,7 @@ fun createKotlinJavascriptPackageFragmentProvider(
     val components = DeserializationComponents(
             storageManager,
             module,
-            ResourceLoadingClassDataFinder(provider, KotlinJavascriptSerializedResourcePaths, loadResource),
+            DeserializedPackageDispatchingClassDataFinder(provider),
             AnnotationAndConstantLoaderImpl(module, JsSerializerProtocol),
             provider,
             localClassResolver,
