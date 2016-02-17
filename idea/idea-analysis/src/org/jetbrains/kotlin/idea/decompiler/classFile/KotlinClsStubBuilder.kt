@@ -55,7 +55,7 @@ open class KotlinClsStubBuilder : ClsStubBuilder() {
     }
 
     fun doBuildFileStub(file: VirtualFile): PsiFileStub<KtFile>? {
-        val kotlinClassHeaderInfo = IDEKotlinBinaryClassCache.getKotlinBinaryClassHeaderData(file)!!
+        val kotlinClassHeaderInfo = IDEKotlinBinaryClassCache.getKotlinBinaryClassHeaderData(file) ?: return null
         val header = kotlinClassHeaderInfo.classHeader
         val classId = kotlinClassHeaderInfo.classId
         val packageFqName = classId.packageFqName
