@@ -5327,6 +5327,12 @@ public class DiagnosticsTestGenerated extends AbstractDiagnosticsTest {
                     KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/diagnostics/tests/duplicateJvmSignature/erasure"), Pattern.compile("^(.+)\\.kt$"), true);
                 }
 
+                @TestMetadata("clashFromInterfaceAndSuperClass.kt")
+                public void testClashFromInterfaceAndSuperClass() throws Exception {
+                    String fileName = KotlinTestUtils.navigationMetadata("compiler/testData/diagnostics/tests/duplicateJvmSignature/erasure/clashFromInterfaceAndSuperClass.kt");
+                    doTest(fileName);
+                }
+
                 @TestMetadata("collections.kt")
                 public void testCollections() throws Exception {
                     String fileName = KotlinTestUtils.navigationMetadata("compiler/testData/diagnostics/tests/duplicateJvmSignature/erasure/collections.kt");
