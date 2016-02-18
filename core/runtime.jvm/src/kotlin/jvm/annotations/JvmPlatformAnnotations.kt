@@ -70,7 +70,7 @@ annotation class JvmSynthetic
  * Example:
  *
  * ```
- * throws(IOException::class)
+ * @Throws(IOException::class)
  * fun readFile(name: String): String {...}
  * ```
  *
@@ -97,8 +97,9 @@ annotation class JvmField
 
 /**
  * Instructs compiler to generate or omit wildcards for type arguments corresponding to parameters with declaration-site variance.
- * If the innermost applied @JvmSuppressWildcards has suppress=true, the type is generated as without wildcards.
- * If the innermost applied @JvmSuppressWildcards has suppress=false, the type is generated as with wildcards.
+ *
+ * If the innermost applied `@JvmSuppressWildcards` has `suppress=true`, the type is generated as without wildcards.
+ * If the innermost applied `@JvmSuppressWildcards` has `suppress=false`, the type is generated as with wildcards.
  *
  * It may be helpful only if declaration seems to be inconvenient to use from Java.
  */
