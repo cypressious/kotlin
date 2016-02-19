@@ -23,6 +23,7 @@ import kotlin.jvm.functions.Function1;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.descriptors.CallableDescriptor;
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptor;
 import org.jetbrains.kotlin.diagnostics.DiagnosticSink;
 import org.jetbrains.kotlin.diagnostics.Errors;
 import org.jetbrains.kotlin.js.inline.clean.RemoveUnusedFunctionDefinitionsKt;
@@ -67,6 +68,8 @@ public class JsInliner extends JsVisitorWithContextImpl {
             return false;
         }
     };
+    private final Map<DeclarationDescriptor, InliningContext.BlockInfo> blocks =
+            new HashMap<DeclarationDescriptor, InliningContext.BlockInfo>();
 
     public static JsProgram process(@NotNull TranslationContext context) {
         JsProgram program = context.program();
@@ -285,6 +288,12 @@ public class JsInliner extends JsVisitorWithContextImpl {
         @Override
         public FunctionContext getFunctionContext() {
             return functionContext;
+        }
+
+        @NotNull
+        @Override
+        public Map<DeclarationDescriptor, InliningContext.BlockInfo> getBlocks() {
+            return blocks;
         }
     }
 

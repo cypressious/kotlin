@@ -17,10 +17,11 @@
 package org.jetbrains.kotlin.js.inline.util.rewriters
 
 import com.google.dart.compiler.backend.js.ast.*
-import org.jetbrains.kotlin.js.inline.util.canHaveSideEffect
+import com.google.dart.compiler.backend.js.ast.metadata.returnTarget
+import org.jetbrains.kotlin.js.inline.context.InliningContext
 import org.jetbrains.kotlin.js.translate.utils.JsAstUtils
 
-class ReturnReplacingVisitor(private val resultRef: JsNameRef?, private val breakLabel: JsNameRef?) : JsVisitorWithContextImpl() {
+class ReturnReplacingVisitor(private val inliningContext: InliningContext) : JsVisitorWithContextImpl() {
 
     /**
      * Prevents replacing returns in object literal
@@ -33,28 +34,31 @@ class ReturnReplacingVisitor(private val resultRef: JsNameRef?, private val brea
     override fun visit(x: JsFunction, ctx: JsContext<JsNode>): Boolean = false
 
     override fun endVisit(x: JsReturn, ctx: JsContext<JsNode>) {
-        ctx.removeMe()
+        val blockInfo = inliningContext.blocks[x.returnTarget] ?: return
 
-        val returnReplacement = getReturnReplacement(x.expression)
+        ctx.removeMe()
+        val returnReplacement = getReturnReplacement(blockInfo, x.expression)
         if (returnReplacement != null) {
             ctx.addNext(JsExpressionStatement(returnReplacement))
         }
 
-        if (breakLabel != null) {
-            ctx.addNext(JsBreak(breakLabel))
+        var labelName = blockInfo.label
+        if (labelName == null) {
+            labelName = blockInfo.namingContext.getFreshName(blockInfo.labelPrefix + "\$break")
+            blockInfo.label = labelName
         }
-
+        ctx.addNext(JsBreak(labelName.makeRef()))
     }
 
-    private fun getReturnReplacement(returnExpression: JsExpression?): JsExpression? {
-        if (returnExpression != null) {
-            if (resultRef != null)
-                return JsAstUtils.assignment(resultRef, returnExpression)
+    private fun getReturnReplacement(blockInfo: InliningContext.BlockInfo, returnExpression: JsExpression?): JsExpression? {
+        if (returnExpression == null) return returnExpression
 
-            if (returnExpression.canHaveSideEffect())
-                return returnExpression
+        if (blockInfo.result == null) {
+            val name = blockInfo.namingContext.getFreshName(blockInfo.labelPrefix)
+            blockInfo.result = name.makeRef()
+            blockInfo.namingContext.newVar(name)
         }
-
-        return null
+        blockInfo.returnCount++
+        return JsAstUtils.assignment(blockInfo.result!!, returnExpression);
     }
 }

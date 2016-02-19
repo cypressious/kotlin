@@ -16,12 +16,19 @@
 
 package org.jetbrains.kotlin.js.inline.context
 
-import com.google.dart.compiler.backend.js.ast.JsContext
-import com.google.dart.compiler.backend.js.ast.JsStatement
+import com.google.dart.compiler.backend.js.ast.*
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 
 interface InliningContext {
     val statementContext: JsContext<JsStatement>
     val functionContext: FunctionContext
+    val blocks: MutableMap<DeclarationDescriptor, BlockInfo>
 
     fun newNamingContext(): NamingContext
+
+    class BlockInfo(val labelPrefix: String, val namingContext: NamingContext) {
+        var label: JsName? = null
+        var result: JsExpression? = null
+        var returnCount = 0
+    }
 }

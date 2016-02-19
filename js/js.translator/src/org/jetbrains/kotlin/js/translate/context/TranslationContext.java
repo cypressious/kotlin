@@ -113,26 +113,26 @@ public class TranslationContext {
 
     @NotNull
     public TranslationContext contextWithScope(@NotNull JsFunction fun) {
-        return this.newFunctionBody(fun, aliasingContext);
+        return this.newFunctionBody(fun, aliasingContext, declarationDescriptor);
     }
 
     @NotNull
-    public TranslationContext newFunctionBody(@NotNull JsFunction fun, @Nullable AliasingContext aliasingContext) {
+    public TranslationContext newFunctionBody(@NotNull JsFunction fun, @Nullable AliasingContext aliasingContext,
+            DeclarationDescriptor descriptor) {
         DynamicContext dynamicContext = DynamicContext.newContext(fun.getScope(), fun.getBody());
         if (aliasingContext == null) {
             aliasingContext = this.aliasingContext.inner();
         }
 
-        return new TranslationContext(this, this.staticContext, dynamicContext, aliasingContext, this.usageTracker, null,
-                                      this.declarationDescriptor);
+        return new TranslationContext(this, this.staticContext, dynamicContext, aliasingContext, this.usageTracker, null, descriptor);
     }
 
     @NotNull
     public TranslationContext newFunctionBodyWithUsageTracker(@NotNull JsFunction fun, @NotNull MemberDescriptor descriptor) {
         DynamicContext dynamicContext = DynamicContext.newContext(fun.getScope(), fun.getBody());
         UsageTracker usageTracker = new UsageTracker(this.usageTracker, descriptor, fun.getScope());
-        return new TranslationContext(this, this.staticContext, dynamicContext, this.aliasingContext.inner(), usageTracker, this.definitionPlace,
-                                      descriptor);
+        return new TranslationContext(this, this.staticContext, dynamicContext, this.aliasingContext.inner(), usageTracker,
+                                      this.definitionPlace, descriptor);
     }
 
     @NotNull
@@ -149,8 +149,7 @@ public class TranslationContext {
     @NotNull
     public TranslationContext newDeclaration(@NotNull DeclarationDescriptor descriptor, @Nullable DefinitionPlace place) {
         DynamicContext dynamicContext = DynamicContext.newContext(getScopeForDescriptor(descriptor), getBlockForDescriptor(descriptor));
-        return new TranslationContext(this, staticContext, dynamicContext, aliasingContext, usageTracker, place,
-                                      descriptor);
+        return new TranslationContext(this, staticContext, dynamicContext, aliasingContext, usageTracker, place, descriptor);
     }
 
     @NotNull
@@ -392,7 +391,7 @@ public class TranslationContext {
     }
 
     @NotNull
-    private DefinitionPlace getDefinitionPlace() {
+    public DefinitionPlace getDefinitionPlace() {
         if (definitionPlace != null) return definitionPlace;
         if (parent != null) return parent.getDefinitionPlace();
 
@@ -429,5 +428,10 @@ public class TranslationContext {
             decl = decl.getContainingDeclaration();
         }
         return null;
+    }
+
+    @Nullable
+    public DeclarationDescriptor getDeclarationDescriptor() {
+        return declarationDescriptor;
     }
 }

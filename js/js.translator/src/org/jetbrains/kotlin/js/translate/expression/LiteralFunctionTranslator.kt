@@ -17,6 +17,7 @@
 package org.jetbrains.kotlin.js.translate.expression
 
 import com.google.dart.compiler.backend.js.ast.*
+import com.google.dart.compiler.backend.js.ast.metadata.declarationDescriptor
 import com.google.dart.compiler.backend.js.ast.metadata.isLocal
 import com.google.dart.compiler.backend.js.ast.metadata.staticRef
 import org.jetbrains.kotlin.descriptors.*
@@ -44,6 +45,7 @@ class LiteralFunctionTranslator(context: TranslationContext) : AbstractTranslato
         FunctionTranslator.addParameters(lambda.parameters, descriptor, functionContext)
         val functionBody = translateFunctionBody(descriptor, declaration, functionContext)
         lambda.body.statements.addAll(functionBody.statements)
+        lambda.body.declarationDescriptor = functionBody.declarationDescriptor
 
         val tracker = functionContext.usageTracker()!!
 
@@ -143,7 +145,7 @@ private fun moveCapturedLocalInside(capturingFunction: JsFunction, capturedName:
  *
  * For example:
  *  val x = 0
- *  [inline] fun id() = x
+ *  inline fun id() = x
  *  val lambda = {println(id())}
  *
  * `lambda` should capture x in this case

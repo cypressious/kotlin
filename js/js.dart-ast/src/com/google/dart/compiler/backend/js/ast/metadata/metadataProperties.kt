@@ -20,6 +20,7 @@ package com.google.dart.compiler.backend.js.ast.metadata
 import com.google.dart.compiler.backend.js.ast.*
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.resolve.inline.InlineStrategy
 
 var JsName.staticRef: JsNode? by MetadataProperty(default = null)
@@ -36,6 +37,10 @@ var JsFunction.isLocal: Boolean by MetadataProperty(default = false)
 var JsParameter.hasDefaultValue: Boolean by MetadataProperty(default = false)
 
 var JsInvocation.typeCheck: TypeCheck? by MetadataProperty(default = null)
+
+var SourceInfoAwareJsNode.declarationDescriptor: DeclarationDescriptor? by MetadataProperty(default = null)
+
+var JsReturn.returnTarget: DeclarationDescriptor? by MetadataProperty(default = null)
 
 enum class TypeCheck {
     TYPEOF,
