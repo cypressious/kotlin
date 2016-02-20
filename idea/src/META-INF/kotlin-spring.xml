@@ -1,5 +1,16 @@
 <idea-plugin>
   <extensions defaultExtensionNs="com.intellij">
     <codeInsight.lineMarkerProvider language="kotlin" implementationClass="org.jetbrains.kotlin.idea.spring.lineMarking.KotlinSpringClassAnnotator"/>
+
+    <localInspection language="kotlin"
+                     shortName="KotlinSpringFacetCodeInspection"
+                     bundle="resources.messages.SpringBundle"
+                     key="spring.facet.code.inspection"
+                     groupBundle="resources.messages.SpringBundle"
+                     groupKey="inspection.group.setup"
+                     groupPath="Kotlin,Spring,Spring Core"
+                     enabledByDefault="true"
+                     level="WARNING"
+                     implementationClass="org.jetbrains.kotlin.idea.spring.inspections.KotlinSpringFacetCodeInspection"/>
   </extensions>
 </idea-plugin>
