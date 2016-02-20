@@ -28,9 +28,6 @@ import org.jetbrains.kotlin.codegen.intrinsics.IntrinsicArrayConstructorsKt;
 import org.jetbrains.kotlin.codegen.state.GenerationState;
 import org.jetbrains.kotlin.codegen.state.JetTypeMapper;
 import org.jetbrains.kotlin.descriptors.*;
-import org.jetbrains.kotlin.load.kotlin.incremental.components.IncrementalCache;
-import org.jetbrains.kotlin.load.kotlin.incremental.components.IncrementalCompilationComponents;
-import org.jetbrains.kotlin.modules.TargetId;
 import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.Name;
 import org.jetbrains.kotlin.psi.*;
@@ -67,15 +64,9 @@ import static org.jetbrains.kotlin.codegen.inline.InlineCodegenUtil.addInlineMar
 import static org.jetbrains.kotlin.codegen.inline.InlineCodegenUtil.getConstant;
 import static org.jetbrains.kotlin.types.expressions.ExpressionTypingUtils.isFunctionLiteral;
 
-public class InlineCodegen extends CallGenerator {
-    private final GenerationState state;
-    private final JetTypeMapper typeMapper;
+public class InlineCodegen extends BaseInlineCodegen {
 
-    private final FunctionDescriptor functionDescriptor;
-    private final JvmMethodSignature jvmSignature;
     private final KtElement callElement;
-    private final MethodContext context;
-    private final ExpressionCodegen codegen;
 
     private final boolean asFunctionInline;
     private final int initialFrameSize;
@@ -86,7 +77,6 @@ public class InlineCodegen extends CallGenerator {
 
     private final ReifiedTypeInliner reifiedTypeInliner;
     @Nullable private final TypeParameterMappings typeParameterMappings;
-    private final boolean isDefaultMethodCompilation;
 
     private LambdaInfo activeLambda;
 
@@ -97,29 +87,17 @@ public class InlineCodegen extends CallGenerator {
             @NotNull GenerationState state,
             @NotNull FunctionDescriptor function,
             @NotNull KtElement callElement,
-            @Nullable TypeParameterMappings typeParameterMappings,
-            boolean isDefaultMethodCompilation
+            @Nullable TypeParameterMappings typeParameterMappings
     ) {
-        assert InlineUtil.isInline(function) || InlineUtil.isArrayConstructorWithLambda(function) :
-                "InlineCodegen can inline only inline functions and array constructors: " + function;
-        this.isDefaultMethodCompilation = isDefaultMethodCompilation;
-        this.state = state;
-        this.typeMapper = state.getTypeMapper();
-        this.codegen = codegen;
+        super(function, codegen, state);
+
         this.callElement = callElement;
-        this.functionDescriptor =
-                InlineUtil.isArrayConstructorWithLambda(function)
-                ? FictitiousArrayConstructor.create((ConstructorDescriptor) function)
-                : function.getOriginal();
+
         this.typeParameterMappings = typeParameterMappings;
 
         reifiedTypeInliner = new ReifiedTypeInliner(typeParameterMappings);
 
         initialFrameSize = codegen.getFrameMap().getCurrentSize();
-
-        PsiElement element = DescriptorToSourceUtils.descriptorToDeclaration(functionDescriptor);
-        context = (MethodContext) getContext(functionDescriptor, state, element != null ? (KtFile) element.getContainingFile() : null);
-        jvmSignature = typeMapper.mapSignature(functionDescriptor, context.getContextKind());
 
         // TODO: implement AS_FUNCTION inline strategy
         this.asFunctionInline = false;
@@ -127,15 +105,6 @@ public class InlineCodegen extends CallGenerator {
         isSameModule = JvmCodegenUtil.isCallInsideSameModuleAsDeclared(functionDescriptor, codegen.getContext(), state.getOutDirectory());
 
         sourceMapper = codegen.getParentCodegen().getOrCreateSourceMapper();
-
-        if (!(functionDescriptor instanceof FictitiousArrayConstructor)) {
-            reportIncrementalInfo(functionDescriptor, codegen.getContext().getFunctionDescriptor().getOriginal());
-        }
-    }
-
-    @Override
-    public void genCallWithoutAssertions(@NotNull CallableMethod callableMethod, @NotNull ExpressionCodegen codegen) {
-        genCall(callableMethod, null, false, codegen);
     }
 
     @Override
@@ -148,11 +117,7 @@ public class InlineCodegen extends CallGenerator {
 
         try {
             nodeAndSmap = createMethodNode(callDefault);
-            if (isDefaultMethodCompilation) {
-                nodeAndSmap.getNode().accept(new MethodBodyVisitor(codegen.v));
-            } else {
-                endCall(inlineCall(nodeAndSmap));
-            }
+            endCall(inlineCall(nodeAndSmap));
         }
         catch (CompilationException e) {
             throw e;
@@ -190,6 +155,18 @@ public class InlineCodegen extends CallGenerator {
 
     @NotNull
     private SMAPAndMethodNode createMethodNode(boolean callDefault) throws IOException {
+        return createMethodNode(functionDescriptor, jvmSignature, codegen, context, callDefault, state);
+    }
+
+    @NotNull
+    static SMAPAndMethodNode createMethodNode(
+            @NotNull FunctionDescriptor functionDescriptor,
+            @NotNull JvmMethodSignature jvmSignature,
+            @NotNull ExpressionCodegen codegen,
+            @NotNull CodegenContext context,
+            boolean callDefault,
+            @NotNull GenerationState state) throws IOException {
+        JetTypeMapper typeMapper = state.getTypeMapper();
         Method asmMethod = callDefault
                            ? typeMapper.mapDefaultMethod(functionDescriptor, context.getContextKind())
                            : jvmSignature.getAsmMethod();
@@ -257,7 +234,7 @@ public class InlineCodegen extends CallGenerator {
                 smap = createSMAPWithDefaultMapping(inliningFunction, parentCodegen.getOrCreateSourceMapper().getResultMappings());
             }
             else {
-                smap = generateMethodBody(maxCalcAdapter, functionDescriptor, methodContext, inliningFunction, jvmSignature, false);
+                smap = generateMethodBody(maxCalcAdapter, functionDescriptor, methodContext, inliningFunction, jvmSignature, false, codegen, state);
             }
 
             nodeAndSMAP = new SMAPAndMethodNode(node, smap);
@@ -355,24 +332,27 @@ public class InlineCodegen extends CallGenerator {
 
         MethodVisitor adapter = InlineCodegenUtil.wrapWithMaxLocalCalc(methodNode);
 
-        SMAP smap = generateMethodBody(adapter, descriptor, context, declaration, jvmMethodSignature, true);
+        SMAP smap = generateMethodBody(adapter, descriptor, context, declaration, jvmMethodSignature, true, codegen, state);
         adapter.visitMaxs(-1, -1);
         return new SMAPAndMethodNode(methodNode, smap);
     }
 
-    private SMAP generateMethodBody(
+    private static SMAP generateMethodBody(
             @NotNull MethodVisitor adapter,
             @NotNull FunctionDescriptor descriptor,
             @NotNull MethodContext context,
             @NotNull KtExpression expression,
             @NotNull JvmMethodSignature jvmMethodSignature,
-            boolean isLambda
+            boolean isLambda,
+            @NotNull ExpressionCodegen codegen,
+            @NotNull GenerationState state
+
     ) {
         FakeMemberCodegen parentCodegen =
                 new FakeMemberCodegen(codegen.getParentCodegen(), expression,
                                       (FieldOwnerContext) context.getParentContext(),
                                       isLambda ? codegen.getParentCodegen().getClassName()
-                                               : typeMapper.mapImplementationOwner(descriptor).getInternalName());
+                                               : state.getTypeMapper().mapImplementationOwner(descriptor).getInternalName());
 
         FunctionGenerationStrategy strategy =
                 expression instanceof KtCallableReferenceExpression ?
@@ -633,33 +613,6 @@ public class InlineCodegen extends CallGenerator {
         activeLambda = null;
     }
 
-    public static CodegenContext getContext(@NotNull DeclarationDescriptor descriptor, @NotNull GenerationState state, @Nullable KtFile sourceFile) {
-        if (descriptor instanceof PackageFragmentDescriptor) {
-            return new PackageContext((PackageFragmentDescriptor) descriptor, state.getRootContext(), null, sourceFile);
-        }
-
-        CodegenContext parent = getContext(descriptor.getContainingDeclaration(), state, sourceFile);
-
-        if (descriptor instanceof ScriptDescriptor) {
-            List<ScriptDescriptor> earlierScripts = state.getReplSpecific().getEarlierScriptsForReplInterpreter();
-            return parent.intoScript((ScriptDescriptor) descriptor,
-                                     earlierScripts == null ? Collections.emptyList() : earlierScripts,
-                                     (ClassDescriptor) descriptor, state.getTypeMapper());
-        }
-        else if (descriptor instanceof ClassDescriptor) {
-            OwnerKind kind = DescriptorUtils.isInterface(descriptor) ? OwnerKind.DEFAULT_IMPLS : OwnerKind.IMPLEMENTATION;
-            return parent.intoClass((ClassDescriptor) descriptor, kind, state);
-        }
-        else if (descriptor instanceof FunctionDescriptor) {
-            return parent.intoFunction((FunctionDescriptor) descriptor);
-        }
-
-        throw new IllegalStateException("Couldn't build context for " + descriptorName(descriptor));
-    }
-
-    private static String descriptorName(DeclarationDescriptor descriptor) {
-        return DescriptorRenderer.SHORT_NAMES_IN_TYPES.render(descriptor);
-    }
 
     @Override
     public void genValueAndPut(
@@ -682,11 +635,6 @@ public class InlineCodegen extends CallGenerator {
             @NotNull Type parameterType,
             @NotNull StackValue value
     ) {
-        if (isDefaultMethodCompilation) {
-            //original method would be inlined directly into default impl body without any inline magic
-            //so we no need to load variables on stack to further method call
-            return;
-        }
         putValueIfNeeded(parameterType, value, -1);
     }
 
@@ -801,21 +749,6 @@ public class InlineCodegen extends CallGenerator {
 
     private SourceMapper createNestedSourceMapper(@NotNull SMAPAndMethodNode nodeAndSmap) {
         return new NestedSourceMapper(sourceMapper, nodeAndSmap.getRanges(), nodeAndSmap.getClassSMAP().getSourceInfo());
-    }
-
-    private void reportIncrementalInfo(
-            @NotNull FunctionDescriptor sourceDescriptor,
-            @NotNull FunctionDescriptor targetDescriptor
-    ) {
-        IncrementalCompilationComponents incrementalCompilationComponents = state.getIncrementalCompilationComponents();
-        TargetId targetId = state.getTargetId();
-
-        if (incrementalCompilationComponents == null || targetId == null) return;
-
-        IncrementalCache incrementalCache = incrementalCompilationComponents.getIncrementalCache(targetId);
-        String classFilePath = InlineCodegenUtilsKt.getClassFilePath(sourceDescriptor, typeMapper, incrementalCache);
-        String sourceFilePath = InlineCodegenUtilsKt.getSourceFilePath(targetDescriptor);
-        incrementalCache.registerInline(classFilePath, jvmSignature.toString(), sourceFilePath);
     }
 
     @Override
