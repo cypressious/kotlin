@@ -19,7 +19,11 @@ package org.jetbrains.kotlin.idea.intentions
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
+import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor
+import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptor
+import org.jetbrains.kotlin.idea.core.getDirectlyOverriddenDeclarations
 import org.jetbrains.kotlin.idea.inspections.IntentionBasedInspection
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
 import org.jetbrains.kotlin.psi.psiUtil.getStartOffsetIn
@@ -37,6 +41,21 @@ class RemoveSetterParameterTypeInspection(
         val start = it.getStartOffsetIn(element)
         TextRange(start, start + it.endOffset - it.startOffset)
     }
+}
+
+class RemoveOverriddenExplicitTypeInspection : IntentionBasedInspection<KtCallableDeclaration>(
+        RemoveExplicitTypeIntention(),
+        KtCallableDeclaration::isRemoveTypeInspectionApplicable)
+
+private fun KtCallableDeclaration.isRemoveTypeInspectionApplicable(): Boolean {
+    if (!hasModifier(KtTokens.OVERRIDE_KEYWORD)) return false
+    if ((this as? KtWithExpressionInitializer)?.initializer == null) return false
+
+    val descriptor = resolveToDescriptor() as? CallableMemberDescriptor ?: return false
+    val overriddenDeclarations = descriptor.getDirectlyOverriddenDeclarations()
+
+    val returnType = descriptor.returnType
+    return overriddenDeclarations.all { it.returnType == returnType }
 }
 
 class RemoveExplicitTypeIntention : SelfTargetingRangeIntention<KtCallableDeclaration>(
